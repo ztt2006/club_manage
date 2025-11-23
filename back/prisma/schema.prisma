@@ -1,0 +1,326 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique @db.VarChar(50)
+  password  String   @db.VarChar(255)
+  email     String   @unique @db.VarChar(100)
+  realName  String   @db.VarChar(50)
+  phone     String?  @db.VarChar(20)
+  avatar    String?  @db.VarChar(255)
+  role      Role     @default(USER)
+  status    Status   @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clubMembers     ClubMember[]
+  activities      Activity[]
+  recruitments    Recruitment[]
+  activityRecords ActivityRecord[]
+  notifications   Notification[]
+  sentMessages    Message[]       @relation("SentMessages")
+  receivedMessages Message[]      @relation("ReceivedMessages")
+  comments        Comment[]
+  announcements   Announcement[]
+
+  @@map("users")
+}
+
+model Club {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  logo        String?  @db.VarChar(255)
+  category    String   @db.VarChar(50)
+  foundedDate DateTime?
+  status      Status   @default(ACTIVE)
+  maxMembers  Int      @default(100)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members      ClubMember[]
+  activities   Activity[]
+  recruitments Recruitment[]
+  announcements Announcement[]
+  comments     Comment[]
+
+  @@map("clubs")
+}
+
+model ClubMember {
+  id        Int          @id @default(autoincrement())
+  clubId    Int
+  userId    Int
+  role      ClubRole     @default(MEMBER)
+  joinDate  DateTime     @default(now())
+  status    Status       @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@map("club_members")
+}
+
+model Activity {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(200)
+  description String?  @db.Text
+  clubId      Int?
+  organizerId Int
+  location    String   @db.VarChar(200)
+  startTime   DateTime
+  endTime     DateTime
+  maxParticipants Int?
+  status      ActivityStatus @default(PLANNED)
+  cover       String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club       Club?   @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  organizer  User    @relation(fields: [organizerId], references: [id])
+  records    ActivityRecord[]
+  comments   Comment[]
+
+  @@map("activities")
+}
+
+model ActivityRecord {
+  id         Int      @id @default(autoincrement())
+  activityId Int
+  userId     Int
+  status     ParticipantStatus @default(REGISTERED)
+  registeredAt DateTime @default(now())
+  checkedInAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, userId])
+  @@map("activity_records")
+}
+
+model Recruitment {
+  id          Int      @id @default(autoincrement())
+  clubId      Int
+  title       String   @db.VarChar(200)
+  description String?  @db.Text
+  requirements String? @db.Text
+  positions   Int      @default(10)
+  startDate   DateTime
+  endDate     DateTime
+  status      RecruitmentStatus @default(OPEN)
+  createdBy   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club      Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  creator   User @relation(fields: [createdBy], references: [id])
+  applications Application[]
+
+  @@map("recruitments")
+}
+
+model Application {
+  id            Int      @id @default(autoincrement())
+  recruitmentId Int
+  applicantName String   @db.VarChar(50)
+  applicantEmail String  @db.VarChar(100)
+  applicantPhone String? @db.VarChar(20)
+  reason        String?  @db.Text
+  status        ApplicationStatus @default(PENDING)
+  reviewedAt    DateTime?
+  reviewNote    String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  recruitment Recruitment @relation(fields: [recruitmentId], references: [id], onDelete: Cascade)
+
+  @@map("applications")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ClubRole {
+  PRESIDENT
+  VICE_PRESIDENT
+  MANAGER
+  MEMBER
+}
+
+enum ActivityStatus {
+  PLANNED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum ParticipantStatus {
+  REGISTERED
+  CHECKED_IN
+  ABSENT
+  CANCELLED
+}
+
+enum RecruitmentStatus {
+  OPEN
+  CLOSED
+  DRAFT
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// 通知系统
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String   @db.VarChar(200)
+  content   String   @db.Text
+  type      NotificationType
+  relatedId Int?     // 关联的ID（活动ID、社团ID等）
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([userId, isRead])
+}
+
+// 公告系统
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  title     String   @db.VarChar(200)
+  content   String   @db.Text
+  type      AnnouncementType @default(CLUB)
+  clubId    Int?     // 社团公告关联社团ID
+  creatorId Int
+  priority  Priority @default(NORMAL)
+  isPinned  Boolean  @default(false)
+  status    Status   @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club    Club? @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  creator User  @relation(fields: [creatorId], references: [id])
+
+  @@map("announcements")
+  @@index([clubId, isPinned, createdAt])
+}
+
+// 评论系统
+model Comment {
+  id         Int      @id @default(autoincrement())
+  content    String   @db.Text
+  targetType CommentTargetType
+  targetId   Int      // 目标ID（活动ID或社团ID）
+  clubId     Int?
+  activityId Int?
+  userId     Int
+  parentId   Int?     // 父评论ID，用于回复
+  rating     Int?     // 评分 1-5
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club     Club?     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  @@map("comments")
+  @@index([targetType, targetId, createdAt])
+}
+
+// 站内消息
+model Message {
+  id         Int      @id @default(autoincrement())
+  senderId   Int
+  receiverId Int
+  subject    String   @db.VarChar(200)
+  content    String   @db.Text
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+  @@index([receiverId, isRead])
+}
+
+// 操作日志
+model OperationLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  username   String   @db.VarChar(50)
+  action     String   @db.VarChar(100)
+  resource   String   @db.VarChar(100)
+  resourceId Int?
+  method     String   @db.VarChar(20)
+  path       String   @db.VarChar(500)
+  ip         String   @db.VarChar(50)
+  userAgent  String?  @db.Text
+  status     Int
+  message    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@map("operation_logs")
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
+enum NotificationType {
+  SYSTEM          // 系统通知
+  ACTIVITY        // 活动通知
+  CLUB            // 社团通知
+  RECRUITMENT     // 招新通知
+  APPLICATION     // 申请审核通知
+  MEMBER          // 成员通知
+}
+
+enum AnnouncementType {
+  SYSTEM          // 系统公告
+  CLUB            // 社团公告
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum CommentTargetType {
+  ACTIVITY        // 活动评论
+  CLUB            // 社团评论
+}
